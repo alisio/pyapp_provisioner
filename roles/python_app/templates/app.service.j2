@@ -1,0 +1,49 @@
+# {{ ansible_managed }}
+# Systemd unit file for {{ current_app.name }}
+
+[Unit]
+Description={{ current_app.name }} Python Application
+After=network.target
+Documentation={{ current_app.repo }}
+
+[Service]
+Type=simple
+User={{ current_app.owner }}
+Group={{ current_app.group }}
+WorkingDirectory={{ current_app.dest }}
+
+# Set PATH to include conda environment
+Environment="PATH={{ micromamba_root_prefix }}/envs/{{ current_app.env_name }}/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="VIRTUAL_ENV={{ micromamba_root_prefix }}/envs/{{ current_app.env_name }}"
+
+{% if current_app.env_vars | length > 0 %}
+# Application environment variables
+{% for key, value in current_app.env_vars.items() %}
+Environment="{{ key }}={{ value }}"
+{% endfor %}
+{% endif %}
+
+# Load additional environment from .env file if exists
+EnvironmentFile=-{{ current_app.dest }}/.env
+
+# ExecStart - customize based on your application
+# Default: assumes main.py exists; override with custom template
+ExecStart={{ micromamba_root_prefix }}/envs/{{ current_app.env_name }}/bin/python main.py
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security hardening (adjust based on app needs)
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ current_app.name }}
+
+[Install]
+WantedBy=multi-user.target

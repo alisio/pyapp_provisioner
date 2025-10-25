@@ -1,0 +1,15 @@
+---
+# roles/python_app/handlers/main.yml
+# Handlers for service management
+
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: restart app service
+  ansible.builtin.systemd:
+    name: "{{ service_name }}"
+    state: restarted
+  become: true
+  when: service_name is defined

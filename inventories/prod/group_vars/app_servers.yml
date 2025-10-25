@@ -1,0 +1,110 @@
+---
+# Example inventory configuration
+# File: inventories/prod/group_vars/app_servers.yml
+
+# Global defaults (override role defaults)
+default_user: deploy
+micromamba_root_prefix: "/home/deploy/.micromamba"
+python_app_base_dir: "/opt/apps"
+python_app_default_python: "3.11"
+python_app_log_level: "info"
+python_app_backup_enabled: false
+
+# Python applications to manage
+python_apps:
+  # Full-featured production app
+  - name: boleto_extract_prod
+    repo: "git@github.com:organization/boleto_extract.git"
+    dest: "/opt/apps/boleto_extract"
+    env_name: "boleto_prod"
+    python_version: "3.10"
+    branch: "main"
+    state: present
+    update_strategy: pull
+    git_force: false
+    reinstall_deps: on_change
+    on_failure: fail
+    dependencies:
+      type: requirements
+      file: "requirements.txt"
+    env_vars:
+      DATABASE_URL: "{{ vault_database_url }}"
+      API_KEY: "{{ vault_api_key }}"
+      LOG_LEVEL: "info"
+      ENVIRONMENT: "production"
+    post_install:
+      script: "scripts/setup.sh"
+      args: ["--production", "--migrate"]
+    systemd:
+      enabled: true
+      service_name: "boleto_extract"
+    owner: deploy
+    group: deploy
+    mode: "0755"
+
+  # Data processing app with conda environment
+  - name: data_processor
+    repo: "https://github.com/organization/data_processor.git"
+    dest: "/opt/apps/data_processor"
+    env_name: "data_proc"
+    python_version: "3.11"
+    branch: "v2.1.0"
+    state: present
+    dependencies:
+      type: conda_env
+      file: "environment.yml"
+    env_vars:
+      DATA_DIR: "/mnt/data"
+      OUTPUT_DIR: "/mnt/output"
+    owner: deploy
+    group: deploy
+
+  # Simple API with inline dependencies
+  - name: simple_api
+    repo: "https://github.com/organization/simple_api.git"
+    dest: "/opt/apps/simple"
+    env_name: "simple_env"
+    python_version: "3.11"
+    state: present
+    update_strategy: pull
+    dependencies:
+      type: pip_list
+      packages:
+        - "fastapi==0.104.1"
+        - "uvicorn[standard]==0.24.0"
+        - "pydantic==2.5.0"
+        - "httpx==0.25.1"
+    systemd:
+      enabled: true
+      service_template: "templates/api.service.j2"  # Custom template
+      service_name: "simple_api"
+    owner: deploy
+    group: deploy
+
+  # Development app - skip updates if exists
+  - name: dev_sandbox
+    repo: "git@github.com:organization/sandbox.git"
+    dest: "/opt/apps/sandbox"
+    env_name: "sandbox_env"
+    state: present
+    update_strategy: skip_if_exists
+    reinstall_deps: never
+    dependencies:
+      type: pip_list
+      packages:
+        - ipython
+        - jupyter
+        - pandas
+        - matplotlib
+    owner: deploy
+    group: deploy
+
+  # Remove deprecated application
+  - name: old_legacy_app
+    repo: "git@github.com:organization/old_app.git"
+    dest: "/opt/apps/old_app"
+    env_name: "old_app"
+    state: absent
+    systemd:
+      enabled: true
+      service_name: "old_app"

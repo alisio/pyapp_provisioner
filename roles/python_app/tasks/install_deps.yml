@@ -1,0 +1,145 @@
+---
+# roles/python_app/tasks/install_deps.yml
+# Dependency installation with multiple strategies
+
+- name: "{{ current_app.name }} | Set dependency file path"
+  ansible.builtin.set_fact:
+    dep_file_path: "{{ current_app.dest }}/{{ current_app.dependencies.file }}"
+  when: current_app.dependencies.type in ['conda_env', 'requirements']
+
+- name: "{{ current_app.name }} | Check if dependency file exists"
+  ansible.builtin.stat:
+    path: "{{ dep_file_path }}"
+  register: dep_file_stat
+  when: current_app.dependencies.type in ['conda_env', 'requirements']
+
+- name: "{{ current_app.name }} | Fail if dependency file not found"
+  ansible.builtin.fail:
+    msg: |
+      Dependency file not found for app {{ current_app.name }}
+      Expected: {{ dep_file_path }}
+      Dependency type: {{ current_app.dependencies.type }}
+      
+      Suggested Actions:
+      1. Verify the file exists in repository: {{ current_app.repo }}
+      2. Check the 'file' path in dependencies configuration
+      3. Ensure branch {{ current_app.branch }} contains the file
+  when:
+    - current_app.dependencies.type in ['conda_env', 'requirements']
+    - not dep_file_stat.stat.exists
+
+- name: "{{ current_app.name }} | Calculate dependency file checksum"
+  ansible.builtin.stat:
+    path: "{{ dep_file_path }}"
+    checksum_algorithm: sha256
+  register: dep_file_checksum
+  when:
+    - current_app.dependencies.type in ['conda_env', 'requirements']
+    - dep_file_stat.stat.exists
+
+- name: "{{ current_app.name }} | Check for previous dependency checksum"
+  ansible.builtin.stat:
+    path: "{{ current_app.dest }}/.dep_checksum"
+  register: prev_checksum_stat
+
+- name: "{{ current_app.name }} | Read previous checksum"
+  ansible.builtin.slurp:
+    src: "{{ current_app.dest }}/.dep_checksum"
+  register: prev_checksum_content
+  when: prev_checksum_stat.stat.exists
+
+- name: "{{ current_app.name }} | Determine if dependencies changed"
+  ansible.builtin.set_fact:
+    deps_changed: "{{ (dep_file_checksum.stat.checksum | default('new')) != 
+                      (prev_checksum_content.content | default('') | b64decode | trim) }}"
+
+- name: "{{ current_app.name }} | Decide if reinstall is needed"
+  ansible.builtin.set_fact:
+    should_reinstall: "{{ current_app.reinstall_deps == 'always' or 
+                          (current_app.reinstall_deps == 'on_change' and (deps_changed or repo_changed)) }}"
+
+- name: "{{ current_app.name }} | Install from conda environment.yml"
+  when:
+    - current_app.dependencies.type == 'conda_env'
+    - should_reinstall
+  block:
+    - name: "{{ current_app.name }} | Update conda environment from file"
+      ansible.builtin.shell: |
+        {{ micromamba_root_prefix }}/bin/micromamba install \
+          -n {{ current_app.env_name }} \
+          -f {{ dep_file_path }} \
+          -y
+      become: false
+      register: conda_install_result
+
+    - name: "{{ current_app.name }} | Log conda installation"
+      ansible.builtin.debug:
+        msg: "Installed conda packages from {{ current_app.dependencies.file }}"
+      when: python_app_log_level in ['debug', 'info']
+
+- name: "{{ current_app.name }} | Install from requirements.txt"
+  when:
+    - current_app.dependencies.type == 'requirements'
+    - should_reinstall
+  block:
+    - name: "{{ current_app.name }} | Install pip dependencies"
+      ansible.builtin.shell: |
+        {{ micromamba_root_prefix }}/bin/micromamba run \
+          -n {{ current_app.env_name }} \
+          pip install -r {{ dep_file_path }}
+      become: false
+      register: pip_install_result
+
+    - name: "{{ current_app.name }} | Log pip installation"
+      ansible.builtin.debug:
+        msg: "Installed pip packages from {{ current_app.dependencies.file }}"
+      when: python_app_log_level in ['debug', 'info']
+
+- name: "{{ current_app.name }} | Install from pip_list"
+  when:
+    - current_app.dependencies.type == 'pip_list'
+    - should_reinstall
+  block:
+    - name: "{{ current_app.name }} | Install inline pip packages"
+      ansible.builtin.shell: |
+        {{ micromamba_root_prefix }}/bin/micromamba run \
+          -n {{ current_app.env_name }} \
+          pip install {{ current_app.dependencies.packages | join(' ') }}
+      become: false
+      register: pip_list_install_result
+
+    - name: "{{ current_app.name }} | Log pip_list installation"
+      ansible.builtin.debug:
+        msg: "Installed pip packages: {{ current_app.dependencies.packages | join(', ') }}"
+      when: python_app_log_level in ['debug', 'info']
+
+- name: "{{ current_app.name }} | Save current dependency checksum"
+  ansible.builtin.copy:
+    content: "{{ dep_file_checksum.stat.checksum | default('pip_list') }}\n"
+    dest: "{{ current_app.dest }}/.dep_checksum"
+    owner: "{{ current_app.owner }}"
+    group: "{{ current_app.group }}"
+    mode: "0644"
+  when: should_reinstall
+
+- name: "{{ current_app.name }} | Skip dependency reinstall"
+  ansible.builtin.debug:
+    msg: "Skipping dependency reinstall (reinstall_deps={{ current_app.reinstall_deps }}, changed={{ deps_changed }})"
+  when:
+    - not should_reinstall
+    - python_app_log_level in ['debug', 'info']
+
+- name: "{{ current_app.name }} | List installed packages"
+  ansible.builtin.shell: |
+    {{ micromamba_root_prefix }}/bin/micromamba run -n {{ current_app.env_name }} pip list
+  register: pip_list_output
+  changed_when: false
+  become: false
+  when: python_app_log_level == 'debug'
+
+- name: "{{ current_app.name }} | Display installed packages"
+  ansible.builtin.debug:
+    msg: "{{ pip_list_output.stdout_lines }}"
+  when:
+    - python_app_log_level == 'debug'
+    - pip_list_output is defined

@@ -1,0 +1,57 @@
+---
+# roles/python_app/tasks/systemd.yml
+# Systemd service creation and management
+
+- name: "{{ current_app.name }} | Set service name"
+  ansible.builtin.set_fact:
+    service_name: "{{ current_app.systemd.service_name | default(current_app.name + '.service') }}"
+    service_template: "{{ current_app.systemd.service_template | default('app.service.j2') }}"
+
+- name: "{{ current_app.name }} | Deploy systemd unit file"
+  ansible.builtin.template:
+    src: "{{ service_template }}"
+    dest: "{{ python_app_systemd_dir }}/{{ service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  register: systemd_unit_result
+  notify:
+    - reload systemd
+    - restart app service
+
+- name: "{{ current_app.name }} | Enable systemd service"
+  ansible.builtin.systemd:
+    name: "{{ service_name }}"
+    enabled: true
+    daemon_reload: "{{ systemd_unit_result.changed }}"
+  become: true
+
+- name: "{{ current_app.name }} | Start systemd service"
+  ansible.builtin.systemd:
+    name: "{{ service_name }}"
+    state: started
+  become: true
+  register: service_start_result
+
+- name: "{{ current_app.name }} | Check service status"
+  ansible.builtin.systemd:
+    name: "{{ service_name }}"
+  register: service_status
+  become: true
+
+- name: "{{ current_app.name }} | Log systemd status"
+  ansible.builtin.debug:
+    msg:
+      - "Systemd service: {{ service_name }}"
+      - "Enabled: {{ service_status.status.UnitFileState | default('unknown') }}"
+      - "Active: {{ service_status.status.ActiveState | default('unknown') }}"
+      - "Running: {{ service_status.status.SubState | default('unknown') }}"
+  when: python_app_log_level in ['debug', 'info']
+
+- name: "{{ current_app.name }} | Warn if service not running"
+  ansible.builtin.debug:
+    msg: "⚠ Service {{ service_name }} is not running. Check 'systemctl status {{ service_name }}'"
+  when:
+    - service_status.status.ActiveState | default('') != 'active'
+    - python_app_log_level in ['debug', 'info', 'warning']

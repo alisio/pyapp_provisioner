@@ -1,0 +1,81 @@
+---
+# roles/python_app/molecule/default/converge.yml
+# Apply the role with test configurations
+
+- name: Converge
+  hosts: all
+  gather_facts: true
+  become: false
+
+  vars:
+    default_user: testuser
+    micromamba_root_prefix: /home/testuser/.micromamba
+    python_app_base_dir: /opt/apps
+    python_app_log_level: debug
+
+    python_apps:
+      # Test app with requirements.txt
+      - name: simple_app
+        repo: file:///tmp/git_repos/simple_app
+        dest: /opt/apps/simple_app
+        env_name: simple_env
+        python_version: "3.11"
+        state: present
+        update_strategy: pull
+        dependencies:
+          type: requirements
+          file: requirements.txt
+        owner: testuser
+        group: testuser
+
+      # Test app with conda environment.yml
+      - name: conda_app
+        repo: file:///tmp/git_repos/conda_app
+        dest: /opt/apps/conda_app
+        env_name: conda_env
+        state: present
+        dependencies:
+          type: conda_env
+          file: environment.yml
+        owner: testuser
+        group: testuser
+
+      # Test app with inline pip_list
+      - name: pip_list_app
+        repo: file:///tmp/git_repos/simple_app
+        dest: /opt/apps/pip_list_app
+        env_name: pip_list_env
+        state: present
+        dependencies:
+          type: pip_list
+          packages:
+            - click
+            - requests
+        env_vars:
+          TEST_VAR: "test_value"
+          LOG_LEVEL: "debug"
+        owner: testuser
+        group: testuser
+
+      # Test app with post-install script
+      - name: script_app
+        repo: file:///tmp/git_repos/script_app
+        dest: /opt/apps/script_app
+        env_name: script_env
+        state: present
+        dependencies:
+          type: requirements
+          file: requirements.txt
+        post_install:
+          script: scripts/setup.sh
+        owner: testuser
+        group: testuser
+
+  tasks:
+    - name: Install mambaorg.micromamba role
+      ansible.builtin.include_role:
+        name: mambaorg.micromamba
+
+    - name: Apply python_app role
+      ansible.builtin.include_role:
+        name: python_app

@@ -1,0 +1,51 @@
+---
+# roles/python_app/tasks/setup_env.yml
+# Micromamba environment creation and management
+
+- name: "{{ current_app.name }} | Check if conda environment exists"
+  ansible.builtin.shell: |
+    {{ micromamba_root_prefix }}/bin/micromamba env list | grep -w "{{ current_app.env_name }}" || true
+  register: env_exists_check
+  changed_when: false
+  become: false
+
+- name: "{{ current_app.name }} | Set environment existence fact"
+  ansible.builtin.set_fact:
+    env_exists: "{{ current_app.env_name in env_exists_check.stdout }}"
+
+- name: "{{ current_app.name }} | Remove existing environment (force_recreate)"
+  ansible.builtin.shell: |
+    {{ micromamba_root_prefix }}/bin/micromamba env remove -n {{ current_app.env_name }} -y
+  become: false
+  when:
+    - env_exists
+    - current_app.force_recreate
+
+- name: "{{ current_app.name }} | Create Micromamba environment"
+  ansible.builtin.shell: |
+    {{ micromamba_root_prefix }}/bin/micromamba create \
+      -n {{ current_app.env_name }} \
+      python={{ current_app.python_version }} \
+      -c conda-forge \
+      -y
+  become: false
+  register: create_env_result
+  when: not env_exists or current_app.force_recreate
+  args:
+    creates: "{{ micromamba_root_prefix }}/envs/{{ current_app.env_name }}"
+
+- name: "{{ current_app.name }} | Verify environment Python version"
+  ansible.builtin.shell: |
+    {{ micromamba_root_prefix }}/bin/micromamba run -n {{ current_app.env_name }} python --version
+  register: python_version_check
+  changed_when: false
+  become: false
+
+- name: "{{ current_app.name }} | Log environment setup"
+  ansible.builtin.debug:
+    msg:
+      - "Conda environment: {{ current_app.env_name }}"
+      - "Python version: {{ python_version_check.stdout }}"
+      - "Environment created: {{ create_env_result.changed | default(false) }}"
+      - "Environment path: {{ micromamba_root_prefix }}/envs/{{ current_app.env_name }}"
+  when: python_app_log_level in ['debug', 'info']

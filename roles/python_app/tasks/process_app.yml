@@ -1,0 +1,83 @@
+---
+# roles/python_app/tasks/process_app.yml
+# Process a single application - delegates to specific task files
+
+- name: Set app-level variables with defaults
+  ansible.builtin.set_fact:
+    current_app:
+      name: "{{ app.name }}"
+      repo: "{{ app.repo }}"
+      dest: "{{ app.dest }}"
+      env_name: "{{ app.env_name }}"
+      state: "{{ app.state | default(python_app_defaults.state) }}"
+      branch: "{{ app.branch | default(python_app_defaults.branch) }}"
+      update_strategy: "{{ app.update_strategy | default(python_app_defaults.update_strategy) }}"
+      git_force: "{{ app.git_force | default(python_app_defaults.git_force) }}"
+      force_recreate: "{{ app.force_recreate | default(python_app_defaults.force_recreate) }}"
+      reinstall_deps: "{{ app.reinstall_deps | default(python_app_defaults.reinstall_deps) }}"
+      on_failure: "{{ app.on_failure | default(python_app_defaults.on_failure) }}"
+      python_version: "{{ app.python_version | default(python_app_default_python) }}"
+      owner: "{{ app.owner | default(python_app_defaults.owner) }}"
+      group: "{{ app.group | default(python_app_defaults.group) }}"
+      mode: "{{ app.mode | default(python_app_defaults.mode) }}"
+      dependencies: "{{ app.dependencies | default(omit) }}"
+      env_vars: "{{ app.env_vars | default({}) }}"
+      post_install: "{{ app.post_install | default(omit) }}"
+      systemd: "{{ app.systemd | default({'enabled': false}) }}"
+
+- name: "{{ current_app.name }} | Handle state=absent"
+  ansible.builtin.include_tasks: remove.yml
+  when: current_app.state == 'absent'
+
+- name: "{{ current_app.name }} | Provision application"
+  when: current_app.state in ['present', 'latest']
+  block:
+    - name: "{{ current_app.name }} | Clone/update repository"
+      ansible.builtin.include_tasks: clone_repo.yml
+
+    - name: "{{ current_app.name }} | Setup Micromamba environment"
+      ansible.builtin.include_tasks: setup_env.yml
+
+    - name: "{{ current_app.name }} | Install dependencies"
+      ansible.builtin.include_tasks: install_deps.yml
+      when: current_app.dependencies is defined
+
+    - name: "{{ current_app.name }} | Create environment variables file"
+      ansible.builtin.template:
+        src: env.j2
+        dest: "{{ current_app.dest }}/.env"
+        owner: "{{ current_app.owner }}"
+        group: "{{ current_app.group }}"
+        mode: "{{ python_app_env_file_mode }}"
+      when: current_app.env_vars | length > 0
+
+    - name: "{{ current_app.name }} | Execute post-install script"
+      ansible.builtin.include_tasks: post_install.yml
+      when: current_app.post_install is defined
+
+    - name: "{{ current_app.name }} | Configure systemd service"
+      ansible.builtin.include_tasks: systemd.yml
+      when: current_app.systemd.enabled | default(false)
+
+  rescue:
+    - name: "{{ current_app.name }} | Handle failure"
+      ansible.builtin.debug:
+        msg: "⚠ Failed to provision {{ current_app.name }}: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      when: current_app.on_failure == 'warn'
+
+    - name: "{{ current_app.name }} | Skip on failure"
+      ansible.builtin.meta: end_host
+      when: current_app.on_failure == 'skip'
+
+    - name: "{{ current_app.name }} | Fail on error"
+      ansible.builtin.fail:
+        msg: |
+          Failed to provision application '{{ current_app.name }}'
+          Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+          
+          Suggested Actions:
+          1. Check repository URL and access: {{ current_app.repo }}
+          2. Verify branch exists: {{ current_app.branch }}
+          3. Review dependency configuration
+          4. Check logs above for specific errors
+      when: current_app.on_failure == 'fail'

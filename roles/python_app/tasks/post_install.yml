@@ -1,0 +1,55 @@
+---
+# roles/python_app/tasks/post_install.yml
+# Execute post-installation scripts
+
+- name: "{{ current_app.name }} | Set post-install script path"
+  ansible.builtin.set_fact:
+    post_install_script: "{{ current_app.dest }}/{{ current_app.post_install.script }}"
+
+- name: "{{ current_app.name }} | Check if post-install script exists"
+  ansible.builtin.stat:
+    path: "{{ post_install_script }}"
+  register: post_install_stat
+
+- name: "{{ current_app.name }} | Fail if script not found"
+  ansible.builtin.fail:
+    msg: |
+      Post-install script not found for app {{ current_app.name }}
+      Expected: {{ post_install_script }}
+      
+      Ensure the script exists in repository {{ current_app.repo }}
+  when: not post_install_stat.stat.exists
+
+- name: "{{ current_app.name }} | Make script executable"
+  ansible.builtin.file:
+    path: "{{ post_install_script }}"
+    mode: "0755"
+  when: post_install_stat.stat.exists
+
+- name: "{{ current_app.name }} | Execute post-install script"
+  ansible.builtin.shell: |
+    cd {{ current_app.dest }}
+    {{ micromamba_root_prefix }}/bin/micromamba run \
+      -n {{ current_app.env_name }} \
+      {{ post_install_script }} {{ current_app.post_install.args | default([]) | join(' ') }}
+  environment: "{{ current_app.env_vars }}"
+  become: false
+  register: post_install_result
+  changed_when: post_install_result.rc == 0
+
+- name: "{{ current_app.name }} | Log post-install output"
+  ansible.builtin.debug:
+    msg:
+      - "Post-install script executed: {{ current_app.post_install.script }}"
+      - "Exit code: {{ post_install_result.rc }}"
+      - "Output: {{ post_install_result.stdout_lines }}"
+  when: python_app_log_level in ['debug', 'info']
+
+- name: "{{ current_app.name }} | Check for post-install errors"
+  ansible.builtin.fail:
+    msg: |
+      Post-install script failed for app {{ current_app.name }}
+      Script: {{ post_install_script }}
+      Exit code: {{ post_install_result.rc }}
+      Error output: {{ post_install_result.stderr }}
+  when: post_install_result.rc != 0

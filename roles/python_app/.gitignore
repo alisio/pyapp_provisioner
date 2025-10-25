@@ -1,0 +1,40 @@
+# Ansible
+*.retry
+
+# Molecule
+.molecule/
+.cache/
+molecule/*/.vagrant/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+._*
+
+# Testing
+.pytest_cache/
+.tox/
+htmlcov/
+.coverage
+
+# Temporary
+*.log
+*.tmp
+
+# Local development
+.vagrant/
+test.yml
+local.yml

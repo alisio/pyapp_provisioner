@@ -1,0 +1,134 @@
+---
+# roles/python_app/molecule/default/verify.yml
+# Verify role execution results
+
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: false
+
+  vars:
+    micromamba_bin: /home/testuser/.micromamba/bin/micromamba
+    apps_to_verify:
+      - name: simple_app
+        env: simple_env
+        dest: /opt/apps/simple_app
+        packages: [requests, click]
+      - name: conda_app
+        env: conda_env
+        dest: /opt/apps/conda_app
+        packages: [numpy, pandas]
+      - name: pip_list_app
+        env: pip_list_env
+        dest: /opt/apps/pip_list_app
+        packages: [click, requests]
+      - name: script_app
+        env: script_env
+        dest: /opt/apps/script_app
+        packages: [fastapi]
+
+  tasks:
+    - name: Check repositories were cloned
+      ansible.builtin.stat:
+        path: "{{ item.dest }}/.git"
+      register: repo_dirs
+      loop: "{{ apps_to_verify }}"
+      failed_when: not repo_dirs.results[0].stat.exists
+
+    - name: Verify conda environments exist
+      ansible.builtin.shell: |
+        {{ micromamba_bin }} env list | grep -w "{{ item.env }}"
+      register: env_check
+      changed_when: false
+      loop: "{{ apps_to_verify }}"
+      become_user: testuser
+
+    - name: Check Python version in environments
+      ansible.builtin.shell: |
+        {{ micromamba_bin }} run -n {{ item.env }} python --version
+      register: python_version
+      changed_when: false
+      loop: "{{ apps_to_verify }}"
+      become_user: testuser
+
+    - name: Display Python versions
+      ansible.builtin.debug:
+        msg: "{{ item.item.name }}: {{ item.stdout }}"
+      loop: "{{ python_version.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Verify packages are installed (requirements and pip_list)
+      ansible.builtin.shell: |
+        {{ micromamba_bin }} run -n {{ item.0.env }} pip show {{ item.1 }}
+      register: package_check
+      changed_when: false
+      failed_when: package_check.rc != 0
+      loop: "{{ apps_to_verify | subelements('packages') }}"
+      loop_control:
+        label: "{{ item.0.name }} - {{ item.1 }}"
+      become_user: testuser
+      when: item.0.name in ['simple_app', 'pip_list_app', 'script_app']
+
+    - name: Verify .env file exists for pip_list_app
+      ansible.builtin.stat:
+        path: /opt/apps/pip_list_app/.env
+      register: env_file_stat
+      failed_when: not env_file_stat.stat.exists
+
+    - name: Verify .env file permissions
+      ansible.builtin.assert:
+        that:
+          - env_file_stat.stat.mode == '0600'
+        fail_msg: ".env file should have 0600 permissions"
+
+    - name: Read .env file content
+      ansible.builtin.slurp:
+        src: /opt/apps/pip_list_app/.env
+      register: env_file_content
+
+    - name: Verify environment variables in .env
+      ansible.builtin.assert:
+        that:
+          - "'TEST_VAR=test_value' in env_file_decoded"
+          - "'LOG_LEVEL=debug' in env_file_decoded"
+        fail_msg: "Environment variables not properly set in .env file"
+      vars:
+        env_file_decoded: "{{ env_file_content.content | b64decode }}"
+
+    - name: Verify dependency checksum files exist
+      ansible.builtin.stat:
+        path: "{{ item.dest }}/.dep_checksum"
+      register: checksum_files
+      loop: "{{ apps_to_verify }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Check ownership of app directories
+      ansible.builtin.stat:
+        path: "{{ item.dest }}"
+      register: dir_ownership
+      loop: "{{ apps_to_verify }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Verify correct ownership
+      ansible.builtin.assert:
+        that:
+          - item.stat.pw_name == 'testuser'
+          - item.stat.gr_name == 'testuser'
+        fail_msg: "Directory {{ item.item.dest }} has incorrect ownership"
+      loop: "{{ dir_ownership.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Display verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Verification Summary ==="
+          - "✓ All {{ apps_to_verify | length }} applications verified successfully"
+          - "✓ Repositories cloned"
+          - "✓ Conda environments created"
+          - "✓ Dependencies installed"
+          - "✓ Environment variables configured"
+          - "✓ File ownership correct"

@@ -1,0 +1,112 @@
+---
+# roles/python_app/molecule/default/prepare.yml
+# Prepare test environment
+
+- name: Prepare test environment
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == 'Debian'
+
+    - name: Install required packages
+      ansible.builtin.package:
+        name:
+          - git
+          - curl
+          - ca-certificates
+        state: present
+
+    - name: Create test user
+      ansible.builtin.user:
+        name: testuser
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Create mock git repositories directory
+      ansible.builtin.file:
+        path: /tmp/git_repos
+        state: directory
+        mode: '0755'
+
+    - name: Create mock repo - simple_app (requirements.txt)
+      ansible.builtin.shell: |
+        mkdir -p /tmp/git_repos/simple_app
+        cd /tmp/git_repos/simple_app
+        git init
+        cat > requirements.txt <<EOF
+        requests
+        click
+        EOF
+        cat > main.py <<EOF
+        #!/usr/bin/env python
+        import requests
+        print("Simple app running")
+        EOF
+        git add .
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git commit -m "Initial commit"
+      args:
+        creates: /tmp/git_repos/simple_app/.git
+
+    - name: Create mock repo - conda_app (environment.yml)
+      ansible.builtin.shell: |
+        mkdir -p /tmp/git_repos/conda_app
+        cd /tmp/git_repos/conda_app
+        git init
+        cat > environment.yml <<EOF
+        name: conda_app
+        channels:
+          - conda-forge
+        dependencies:
+          - python=3.11
+          - numpy
+          - pandas
+        EOF
+        cat > main.py <<EOF
+        import numpy as np
+        print("Conda app running")
+        EOF
+        git add .
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git commit -m "Initial commit"
+      args:
+        creates: /tmp/git_repos/conda_app/.git
+
+    - name: Create mock repo - script_app (post-install)
+      ansible.builtin.shell: |
+        mkdir -p /tmp/git_repos/script_app/scripts
+        cd /tmp/git_repos/script_app
+        git init
+        echo "fastapi" > requirements.txt
+        cat > scripts/setup.sh <<'EOF'
+        #!/bin/bash
+        echo "Post-install script executed"
+        exit 0
+        EOF
+        chmod +x scripts/setup.sh
+        cat > main.py <<EOF
+        from fastapi import FastAPI
+        app = FastAPI()
+        EOF
+        git add .
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        git commit -m "Initial commit"
+      args:
+        creates: /tmp/git_repos/script_app/.git
+
+    - name: Set ownership of git repos
+      ansible.builtin.file:
+        path: /tmp/git_repos
+        owner: testuser
+        group: testuser
+        recurse: true

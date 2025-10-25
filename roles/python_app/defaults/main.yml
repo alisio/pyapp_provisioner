@@ -1,0 +1,45 @@
+---
+# roles/python_app/defaults/main.yml
+# Default variables for python_app role - easily overridden in group_vars/host_vars
+
+# Base configuration
+default_user: "deploy"
+micromamba_root_prefix: "/home/{{ default_user }}/.micromamba"
+python_app_base_dir: "/opt/apps"
+python_app_default_python: "3.11"
+
+# Logging and observability
+python_app_log_level: "info"  # debug, info, warning, error
+
+# Default behavior for all apps (can be overridden per-app)
+python_app_defaults:
+  state: "present"                    # present, absent, latest
+  update_strategy: "pull"             # pull, clone_fresh, skip_if_exists
+  git_force: false                    # Overwrite local changes
+  force_recreate: false               # Recreate conda env even if exists
+  reinstall_deps: "on_change"         # always, on_change, never
+  on_failure: "fail"                  # fail, warn, skip
+  owner: "{{ default_user }}"
+  group: "{{ default_user }}"
+  mode: "0755"
+  branch: "main"
+
+# List of Python applications to manage (defined in group_vars/host_vars)
+# python_apps: []
+
+# Systemd defaults
+python_app_systemd_dir: "/etc/systemd/system"
+python_app_env_file_mode: "0600"
+
+# Git configuration
+python_app_git_accept_hostkey: true
+python_app_git_depth: 0  # 0 = full clone, >0 = shallow clone
+
+# Micromamba configuration
+python_app_micromamba_channels:
+  - conda-forge
+  - defaults
+
+# Backup configuration (for rollback scenarios)
+python_app_backup_dir: "/opt/backup"
+python_app_backup_enabled: false

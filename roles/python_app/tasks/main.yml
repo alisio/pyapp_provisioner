@@ -1,0 +1,30 @@
+---
+# roles/python_app/tasks/main.yml
+# Main entry point - orchestrates all operations
+
+- name: Validate prerequisites
+  ansible.builtin.assert:
+    that:
+      - python_apps is defined
+      - python_apps | length > 0
+    fail_msg: "Variable 'python_apps' must be defined with at least one application"
+    quiet: true
+
+- name: Include validation tasks
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Process each Python application
+  ansible.builtin.include_tasks: process_app.yml
+  loop: "{{ python_apps }}"
+  loop_control:
+    loop_var: app
+    label: "{{ app.name }}"
+
+- name: Display provisioning summary
+  ansible.builtin.debug:
+    msg:
+      - "=== Python App Provisioning Summary ==="
+      - "Total apps processed: {{ python_apps | length }}"
+      - "Apps present: {{ python_apps | selectattr('state', 'undefined') | list | length + python_apps | selectattr('state', 'equalto', 'present') | list | length }}"
+      - "Apps removed: {{ python_apps | selectattr('state', 'equalto', 'absent') | list | length }}"
+  when: python_app_log_level in ['debug', 'info']

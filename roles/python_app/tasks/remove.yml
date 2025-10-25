@@ -1,0 +1,72 @@
+---
+# roles/python_app/tasks/remove.yml
+# Handle state=absent - remove application resources
+
+- name: "{{ current_app.name }} | Stop and disable systemd service"
+  when: current_app.systemd.enabled | default(false)
+  block:
+    - name: "{{ current_app.name }} | Set service name for removal"
+      ansible.builtin.set_fact:
+        service_name_remove: "{{ current_app.systemd.service_name | default(current_app.name + '.service') }}"
+
+    - name: "{{ current_app.name }} | Check if service exists"
+      ansible.builtin.stat:
+        path: "{{ python_app_systemd_dir }}/{{ service_name_remove }}"
+      register: service_file_stat
+      become: true
+
+    - name: "{{ current_app.name }} | Stop service"
+      ansible.builtin.systemd:
+        name: "{{ service_name_remove }}"
+        state: stopped
+      become: true
+      when: service_file_stat.stat.exists
+      failed_when: false
+
+    - name: "{{ current_app.name }} | Disable service"
+      ansible.builtin.systemd:
+        name: "{{ service_name_remove }}"
+        enabled: false
+      become: true
+      when: service_file_stat.stat.exists
+      failed_when: false
+
+    - name: "{{ current_app.name }} | Remove systemd unit file"
+      ansible.builtin.file:
+        path: "{{ python_app_systemd_dir }}/{{ service_name_remove }}"
+        state: absent
+      become: true
+      notify: reload systemd
+
+- name: "{{ current_app.name }} | Remove conda environment"
+  ansible.builtin.shell: |
+    {{ micromamba_root_prefix }}/bin/micromamba env remove -n {{ current_app.env_name }} -y
+  become: false
+  register: env_remove_result
+  failed_when: false
+  changed_when: "'removed' in env_remove_result.stdout"
+
+- name: "{{ current_app.name }} | Backup application directory before removal"
+  ansible.builtin.copy:
+    src: "{{ current_app.dest }}/"
+    dest: "{{ python_app_backup_dir }}/{{ current_app.name }}/final_{{ ansible_date_time.epoch }}/"
+    remote_src: true
+    owner: "{{ current_app.owner }}"
+    group: "{{ current_app.group }}"
+  when:
+    - python_app_backup_enabled
+    - current_app.dest is directory
+
+- name: "{{ current_app.name }} | Remove application directory"
+  ansible.builtin.file:
+    path: "{{ current_app.dest }}"
+    state: absent
+
+- name: "{{ current_app.name }} | Log removal"
+  ansible.builtin.debug:
+    msg:
+      - "Application {{ current_app.name }} removed"
+      - "Repository directory removed: {{ current_app.dest }}"
+      - "Conda environment removed: {{ current_app.env_name }}"
+      - "Systemd service removed: {{ service_name_remove | default('N/A') }}"
+  when: python_app_log_level in ['debug', 'info']

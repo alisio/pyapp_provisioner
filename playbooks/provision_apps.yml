@@ -1,0 +1,30 @@
+---
+# Example playbook using the python_app role
+# File: playbooks/provision_apps.yml
+
+- name: Provision Python applications
+  hosts: app_servers
+  gather_facts: true
+  become: false  # Role handles privilege escalation internally
+
+  # Optional: Define variables here or in group_vars
+  vars:
+    # Override defaults if needed
+    # python_app_log_level: debug
+    # python_app_backup_enabled: true
+
+  roles:
+    - role: python_app
+
+  post_tasks:
+    - name: Display provisioning summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Provisioning Complete ==="
+          - "Apps provisioned: {{ python_apps | selectattr('state', 'undefined') | list | length + python_apps | selectattr('state', 'equalto', 'present') | list | length }}"
+          - "Apps removed: {{ python_apps | selectattr('state', 'equalto', 'absent') | list | length }}"
+          - ""
+          - "Next steps:"
+          - "1. Verify services: systemctl status <service_name>"
+          - "2. Check logs: journalctl -u <service_name> -f"
+          - "3. Test apps manually in their conda environments"

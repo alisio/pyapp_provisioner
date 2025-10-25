@@ -1,0 +1,112 @@
+---
+# roles/python_app/tasks/clone_repo.yml
+# Git repository operations with update strategies
+
+- name: "{{ current_app.name }} | Check if repository exists"
+  ansible.builtin.stat:
+    path: "{{ current_app.dest }}/.git"
+  register: git_dir_stat
+
+- name: "{{ current_app.name }} | Handle clone_fresh strategy"
+  when:
+    - git_dir_stat.stat.exists
+    - current_app.update_strategy == 'clone_fresh'
+  block:
+    - name: "{{ current_app.name }} | Backup existing directory (if enabled)"
+      ansible.builtin.copy:
+        src: "{{ current_app.dest }}/"
+        dest: "{{ python_app_backup_dir }}/{{ current_app.name }}/{{ ansible_date_time.epoch }}/"
+        remote_src: true
+        owner: "{{ current_app.owner }}"
+        group: "{{ current_app.group }}"
+      when: python_app_backup_enabled
+
+    - name: "{{ current_app.name }} | Remove existing directory"
+      ansible.builtin.file:
+        path: "{{ current_app.dest }}"
+        state: absent
+
+    - name: "{{ current_app.name }} | Update git_dir_stat for fresh clone"
+      ansible.builtin.set_fact:
+        git_dir_stat:
+          stat:
+            exists: false
+
+- name: "{{ current_app.name }} | Get current commit hash (before update)"
+  ansible.builtin.command:
+    cmd: git rev-parse HEAD
+    chdir: "{{ current_app.dest }}"
+  register: git_before_hash
+  changed_when: false
+  failed_when: false
+  when: git_dir_stat.stat.exists
+
+- name: "{{ current_app.name }} | Clone repository (first time or clone_fresh)"
+  ansible.builtin.git:
+    repo: "{{ current_app.repo }}"
+    dest: "{{ current_app.dest }}"
+    version: "{{ current_app.branch }}"
+    depth: "{{ python_app_git_depth }}"
+    force: "{{ current_app.git_force }}"
+    accept_hostkey: "{{ python_app_git_accept_hostkey }}"
+  become: false
+  register: git_clone_result
+  when: not git_dir_stat.stat.exists
+
+- name: "{{ current_app.name }} | Update repository (pull strategy)"
+  ansible.builtin.git:
+    repo: "{{ current_app.repo }}"
+    dest: "{{ current_app.dest }}"
+    version: "{{ current_app.branch }}"
+    force: "{{ current_app.git_force }}"
+    update: true
+  become: false
+  register: git_pull_result
+  when:
+    - git_dir_stat.stat.exists
+    - current_app.update_strategy == 'pull'
+    - current_app.state == 'latest'
+
+- name: "{{ current_app.name }} | Skip update (skip_if_exists strategy)"
+  ansible.builtin.debug:
+    msg: "Repository exists and update_strategy is 'skip_if_exists' - no update performed"
+  when:
+    - git_dir_stat.stat.exists
+    - current_app.update_strategy == 'skip_if_exists'
+    - python_app_log_level in ['debug', 'info']
+
+- name: "{{ current_app.name }} | Get current commit hash (after update)"
+  ansible.builtin.command:
+    cmd: git rev-parse HEAD
+    chdir: "{{ current_app.dest }}"
+  register: git_after_hash
+  changed_when: false
+
+- name: "{{ current_app.name }} | Set repository facts"
+  ansible.builtin.set_fact:
+    repo_changed: "{{ (git_clone_result.changed | default(false)) or 
+                      (git_pull_result.changed | default(false)) or 
+                      (git_before_hash.stdout | default('') != git_after_hash.stdout) }}"
+    repo_commit_before: "{{ git_before_hash.stdout | default('N/A') }}"
+    repo_commit_after: "{{ git_after_hash.stdout }}"
+
+- name: "{{ current_app.name }} | Set ownership and permissions"
+  ansible.builtin.file:
+    path: "{{ current_app.dest }}"
+    owner: "{{ current_app.owner }}"
+    group: "{{ current_app.group }}"
+    mode: "{{ current_app.mode }}"
+    recurse: true
+  when: current_app.owner != ansible_user_id
+
+- name: "{{ current_app.name }} | Log git operation"
+  ansible.builtin.debug:
+    msg:
+      - "Git operation completed for {{ current_app.name }}"
+      - "Repository: {{ current_app.repo }}"
+      - "Branch: {{ current_app.branch }}"
+      - "Strategy: {{ current_app.update_strategy }}"
+      - "Changed: {{ repo_changed }}"
+      - "Commit before: {{ repo_commit_before }}"
+      - "Commit after: {{ repo_commit_after }}"
+  when: python_app_log_level in ['debug', 'info']

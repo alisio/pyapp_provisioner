@@ -1,0 +1,120 @@
+---
+# roles/python_app/tasks/validate.yml
+# Comprehensive input validation
+
+- name: Validate required fields for each app
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.repo is defined
+      - item.repo is match('^(https?://|git@|ssh://)')
+      - item.dest is defined
+      - item.dest is match('^/')
+      - item.env_name is defined
+      - item.env_name | length > 0
+    fail_msg: |
+      Invalid configuration for app: {{ item.name | default('unnamed') }}
+      Required fields: name, repo (valid Git URL), dest (absolute path), env_name
+    quiet: true
+  loop: "{{ python_apps }}"
+  loop_control:
+    label: "{{ item.name | default('unnamed') }}"
+
+- name: Validate state values
+  ansible.builtin.assert:
+    that:
+      - item.state | default(python_app_defaults.state) in ['present', 'absent', 'latest']
+    fail_msg: "Invalid state '{{ item.state | default(python_app_defaults.state) }}' for app {{ item.name }}. Must be: present, absent, or latest"
+    quiet: true
+  loop: "{{ python_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Validate update_strategy values
+  ansible.builtin.assert:
+    that:
+      - item.update_strategy | default(python_app_defaults.update_strategy) in ['pull', 'clone_fresh', 'skip_if_exists']
+    fail_msg: "Invalid update_strategy for app {{ item.name }}. Must be: pull, clone_fresh, or skip_if_exists"
+    quiet: true
+  loop: "{{ python_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.state | default(python_app_defaults.state) != 'absent'
+
+- name: Validate reinstall_deps values
+  ansible.builtin.assert:
+    that:
+      - item.reinstall_deps | default(python_app_defaults.reinstall_deps) in ['always', 'on_change', 'never']
+    fail_msg: "Invalid reinstall_deps for app {{ item.name }}. Must be: always, on_change, or never"
+    quiet: true
+  loop: "{{ python_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.state | default(python_app_defaults.state) != 'absent'
+
+- name: Validate on_failure values
+  ansible.builtin.assert:
+    that:
+      - item.on_failure | default(python_app_defaults.on_failure) in ['fail', 'warn', 'skip']
+    fail_msg: "Invalid on_failure for app {{ item.name }}. Must be: fail, warn, or skip"
+    quiet: true
+  loop: "{{ python_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Validate dependency configuration
+  ansible.builtin.assert:
+    that:
+      - item.dependencies.type in ['conda_env', 'requirements', 'pip_list']
+      - (item.dependencies.type in ['conda_env', 'requirements'] and item.dependencies.file is defined) or
+        (item.dependencies.type == 'pip_list' and item.dependencies.packages is defined and item.dependencies.packages | length > 0)
+    fail_msg: |
+      Invalid dependency configuration for app {{ item.name }}:
+      - Type must be: conda_env, requirements, or pip_list
+      - conda_env/requirements require 'file' field
+      - pip_list requires 'packages' list with at least one package
+    quiet: true
+  loop: "{{ python_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - item.dependencies is defined
+    - item.state | default(python_app_defaults.state) != 'absent'
+
+- name: Check for duplicate app names
+  ansible.builtin.assert:
+    that:
+      - python_apps | map(attribute='name') | list | length == 
+        python_apps | map(attribute='name') | unique | list | length
+    fail_msg: "Duplicate app names detected. Each app must have a unique 'name' field."
+    quiet: true
+
+- name: Check for duplicate environment names
+  ansible.builtin.assert:
+    that:
+      - active_env_names | length == active_env_names | unique | length
+    fail_msg: "Duplicate environment names detected. Each app must have a unique 'env_name' field."
+    quiet: true
+  vars:
+    active_env_names: "{{ python_apps | rejectattr('state', 'defined') | map(attribute='env_name') | list + 
+                          python_apps | selectattr('state', 'equalto', 'present') | map(attribute='env_name') | list +
+                          python_apps | selectattr('state', 'equalto', 'latest') | map(attribute='env_name') | list }}"
+
+- name: Validate Python version format (if specified)
+  ansible.builtin.assert:
+    that:
+      - item.python_version is match('^\d+\.\d+(\.\d+)?$')
+    fail_msg: "Invalid python_version '{{ item.python_version }}' for app {{ item.name }}. Use format: 3.11 or 3.11.5"
+    quiet: true
+  loop: "{{ python_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - item.python_version is defined
+    - item.state | default(python_app_defaults.state) != 'absent'
+
+- name: Log validation success
+  ansible.builtin.debug:
+    msg: "✓ All {{ python_apps | length }} app configurations validated successfully"
+  when: python_app_log_level in ['debug', 'info']

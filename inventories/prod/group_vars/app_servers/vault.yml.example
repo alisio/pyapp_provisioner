@@ -1,0 +1,26 @@
+---
+# Encrypted secrets file (example - encrypt with ansible-vault)
+# File: inventories/prod/group_vars/app_servers/vault.yml
+# 
+# Create with: ansible-vault create inventories/prod/group_vars/app_servers/vault.yml
+# Edit with: ansible-vault edit inventories/prod/group_vars/app_servers/vault.yml
+# Encrypt existing: ansible-vault encrypt inventories/prod/group_vars/app_servers/vault.yml
+
+# Database credentials
+vault_database_url: "postgresql://boleto_user:SECURE_PASSWORD@db.example.com:5432/boleto_db"
+
+# API Keys
+vault_api_key: "sk-1234567890abcdef1234567890abcdef"
+vault_github_token: "ghp_1234567890abcdefghijklmnop"
+
+# Service credentials
+vault_redis_password: "redis_secure_password_here"
+vault_smtp_password: "smtp_password_here"
+
+# Encryption keys
+vault_secret_key: "django-insecure-key-for-production-CHANGE-THIS"
+
+# Third-party integrations
+vault_stripe_api_key: "sk_live_1234567890"
+vault_aws_access_key: "AKIAIOSFODNN7EXAMPLE"
+vault_aws_secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"

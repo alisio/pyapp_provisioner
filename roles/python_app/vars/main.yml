@@ -1,0 +1,7 @@
+---
+# Role variables with high precedence
+# Only use this directory for variables that MUST NOT be overridden
+# For configurable defaults, use defaults/main.yml instead
+#
+# Variables defined here have higher precedence than defaults/
+# This is typically used for constants or derived values

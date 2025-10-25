@@ -1,0 +1,41 @@
+---
+# roles/python_app/meta/main.yml
+galaxy_info:
+  role_name: python_app
+  namespace: alisio
+  author: alisio
+  description: Idempotent provisioning of Python applications with Micromamba environments
+  company: Alisio DevOps
+  license: MIT
+  min_ansible_version: "2.14"
+  
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal      # 20.04
+        - jammy      # 22.04
+    - name: Debian
+      versions:
+        - bullseye   # 11
+        - bookworm   # 12
+    - name: EL
+      versions:
+        - 8
+        - 9
+
+  galaxy_tags:
+    - python
+    - micromamba
+    - conda
+    - deployment
+    - systemd
+    - git
+
+dependencies:
+  - role: mambaorg.micromamba
+    vars:
+      micromamba_root_prefix: "{{ micromamba_root_prefix }}"
+
+collections:
+  - community.general
+  - ansible.posix
