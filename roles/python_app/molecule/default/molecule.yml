@@ -15,9 +15,14 @@ platforms:
     image: geerlingguy/docker-ubuntu2204-ansible:latest
     command: ""
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /tmp:/tmp:rw
+    cgroupns_mode: host
     privileged: true
     pre_build_image: true
+    tmpfs:
+      - /run
+      - /tmp
 
 provisioner:
   name: ansible
@@ -26,10 +31,12 @@ provisioner:
     defaults:
       callbacks_enabled: profile_tasks,timer
       stdout_callback: yaml
+      remote_tmp: /tmp/.ansible-${USER}/tmp
   inventory:
     host_vars:
       ubuntu2204:
         ansible_user: root
+        ansible_become: false
         default_user: testuser
         micromamba_root_prefix: /home/testuser/.micromamba
         python_app_log_level: debug
