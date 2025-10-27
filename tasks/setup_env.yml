@@ -4,7 +4,10 @@
 
 - name: "{{ current_app.name }} | Check if conda environment exists"
   ansible.builtin.shell: |
+    set -o pipefail
     {{ micromamba_root_prefix }}/bin/micromamba env list | grep -w "{{ current_app.env_name }}" || true
+  args:
+    executable: /bin/bash
   register: env_exists_check
   changed_when: false
   become: false

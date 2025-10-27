@@ -25,6 +25,8 @@
     msg:
       - "=== Python App Provisioning Summary ==="
       - "Total apps processed: {{ python_apps | length }}"
-      - "Apps present: {{ python_apps | selectattr('state', 'undefined') | list | length + python_apps | selectattr('state', 'equalto', 'present') | list | length }}"
+      - >-
+        Apps present: {{ python_apps | selectattr('state', 'undefined') | list | length +
+        python_apps | selectattr('state', 'equalto', 'present') | list | length }}
       - "Apps removed: {{ python_apps | selectattr('state', 'equalto', 'absent') | list | length }}"
   when: python_app_log_level in ['debug', 'info']

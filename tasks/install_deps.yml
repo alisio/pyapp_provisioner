@@ -19,7 +19,7 @@
       Dependency file not found for app {{ current_app.name }}
       Expected: {{ dep_file_path }}
       Dependency type: {{ current_app.dependencies.type }}
-      
+
       Suggested Actions:
       1. Verify the file exists in repository: {{ current_app.repo }}
       2. Check the 'file' path in dependencies configuration
@@ -50,12 +50,12 @@
 
 - name: "{{ current_app.name }} | Determine if dependencies changed"
   ansible.builtin.set_fact:
-    deps_changed: "{{ (dep_file_checksum.stat.checksum | default('new')) != 
+    deps_changed: "{{ (dep_file_checksum.stat.checksum | default('new')) !=
                       (prev_checksum_content.content | default('') | b64decode | trim) }}"
 
 - name: "{{ current_app.name }} | Decide if reinstall is needed"
   ansible.builtin.set_fact:
-    should_reinstall: "{{ current_app.reinstall_deps == 'always' or 
+    should_reinstall: "{{ current_app.reinstall_deps == 'always' or
                           (current_app.reinstall_deps == 'on_change' and (deps_changed or repo_changed)) }}"
 
 - name: "{{ current_app.name }} | Install from conda environment.yml"

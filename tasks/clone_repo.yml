@@ -19,6 +19,8 @@
         remote_src: true
         owner: "{{ current_app.owner }}"
         group: "{{ current_app.group }}"
+        mode: "0755"
+        group: "{{ current_app.group }}"
       when: python_app_backup_enabled
 
     - name: "{{ current_app.name }} | Remove existing directory"
@@ -84,8 +86,8 @@
 
 - name: "{{ current_app.name }} | Set repository facts"
   ansible.builtin.set_fact:
-    repo_changed: "{{ (git_clone_result.changed | default(false)) or 
-                      (git_pull_result.changed | default(false)) or 
+    repo_changed: "{{ (git_clone_result.changed | default(false)) or
+                      (git_pull_result.changed | default(false)) or
                       (git_before_hash.stdout | default('') != git_after_hash.stdout) }}"
     repo_commit_before: "{{ git_before_hash.stdout | default('N/A') }}"
     repo_commit_after: "{{ git_after_hash.stdout }}"

@@ -74,7 +74,7 @@
         msg: |
           Failed to provision application '{{ current_app.name }}'
           Error: {{ ansible_failed_result.msg | default('Unknown error') }}
-          
+
           Suggested Actions:
           1. Check repository URL and access: {{ current_app.repo }}
           2. Verify branch exists: {{ current_app.branch }}

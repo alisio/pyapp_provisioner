@@ -53,6 +53,7 @@
     remote_src: true
     owner: "{{ current_app.owner }}"
     group: "{{ current_app.group }}"
+    mode: "0755"
   when:
     - python_app_backup_enabled
     - current_app.dest is directory

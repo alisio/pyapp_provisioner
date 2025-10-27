@@ -85,7 +85,7 @@
 - name: Check for duplicate app names
   ansible.builtin.assert:
     that:
-      - python_apps | map(attribute='name') | list | length == 
+      - python_apps | map(attribute='name') | list | length ==
         python_apps | map(attribute='name') | unique | list | length
     fail_msg: "Duplicate app names detected. Each app must have a unique 'name' field."
     quiet: true
@@ -97,7 +97,7 @@
     fail_msg: "Duplicate environment names detected. Each app must have a unique 'env_name' field."
     quiet: true
   vars:
-    active_env_names: "{{ python_apps | rejectattr('state', 'defined') | map(attribute='env_name') | list + 
+    active_env_names: "{{ python_apps | rejectattr('state', 'defined') | map(attribute='env_name') | list +
                           python_apps | selectattr('state', 'equalto', 'present') | map(attribute='env_name') | list +
                           python_apps | selectattr('state', 'equalto', 'latest') | map(attribute='env_name') | list }}"
 

@@ -16,7 +16,7 @@
     msg: |
       Post-install script not found for app {{ current_app.name }}
       Expected: {{ post_install_script }}
-      
+
       Ensure the script exists in repository {{ current_app.repo }}
   when: not post_install_stat.stat.exists
 

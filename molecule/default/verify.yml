@@ -37,10 +37,14 @@
 
     - name: Verify conda environments exist
       ansible.builtin.shell: |
+        set -o pipefail
         {{ micromamba_bin }} env list | grep -w "{{ item.env }}"
+      args:
+        executable: /bin/bash
       register: env_check
       changed_when: false
       loop: "{{ apps_to_verify }}"
+      become: true
       become_user: testuser
 
     - name: Check Python version in environments
@@ -49,6 +53,7 @@
       register: python_version
       changed_when: false
       loop: "{{ apps_to_verify }}"
+      become: true
       become_user: testuser
 
     - name: Display Python versions
@@ -67,6 +72,7 @@
       loop: "{{ apps_to_verify | subelements('packages') }}"
       loop_control:
         label: "{{ item.0.name }} - {{ item.1 }}"
+      become: true
       become_user: testuser
       when: item.0.name in ['simple_app', 'pip_list_app', 'script_app']
 
