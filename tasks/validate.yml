@@ -116,5 +116,5 @@
 
 - name: Log validation success
   ansible.builtin.debug:
-    msg: "✓ All {{ python_apps | length }} app configurations validated successfully"
+    msg: "All {{ python_apps | length }} app configurations validated successfully"
   when: python_app_log_level in ['debug', 'info']

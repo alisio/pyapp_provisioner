@@ -62,7 +62,7 @@
   rescue:
     - name: "{{ current_app.name }} | Handle failure"
       ansible.builtin.debug:
-        msg: "⚠ Failed to provision {{ current_app.name }}: {{ ansible_failed_result.msg | default('Unknown error') }}"
+        msg: "Failed to provision {{ current_app.name }}: {{ ansible_failed_result.msg | default('Unknown error') }}"
       when: current_app.on_failure == 'warn'
 
     - name: "{{ current_app.name }} | Skip on failure"

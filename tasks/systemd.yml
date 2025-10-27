@@ -51,7 +51,7 @@
 
 - name: "{{ current_app.name }} | Warn if service not running"
   ansible.builtin.debug:
-    msg: "⚠ Service {{ service_name }} is not running. Check 'systemctl status {{ service_name }}'"
+    msg: "Service {{ service_name }} is not running. Check 'systemctl status {{ service_name }}'"
   when:
     - service_status.status.ActiveState | default('') != 'active'
     - python_app_log_level in ['debug', 'info', 'warning']

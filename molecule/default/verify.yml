@@ -132,9 +132,9 @@
       ansible.builtin.debug:
         msg:
           - "=== Verification Summary ==="
-          - "✓ All {{ apps_to_verify | length }} applications verified successfully"
-          - "✓ Repositories cloned"
-          - "✓ Conda environments created"
-          - "✓ Dependencies installed"
-          - "✓ Environment variables configured"
-          - "✓ File ownership correct"
+          - "All {{ apps_to_verify | length }} applications verified successfully"
+          - "Repositories cloned"
+          - "Conda environments created"
+          - "Dependencies installed"
+          - "Environment variables configured"
+          - "File ownership correct"
